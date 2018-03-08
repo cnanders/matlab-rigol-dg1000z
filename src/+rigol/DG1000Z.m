@@ -31,10 +31,114 @@ classdef DG1000Z < rigol.TcpClientBase
         % Create a single 5 Volt TTL pulse of specified duration in
         % seconds
         % @param {double 1x1} dSec - pulse duration in seconds
-        function c = trigger5VTTL(this, dSec)
+        
+        function trigger5VTTLPulse(this, u8Ch, dSec)
             
+            % !! Need to call configureChannelFor5VTTLPulse first.
+           
+            ceCmd = {
+                sprintf(':SOUR%d:FUNC:PULS:PER %1.3e', u8Ch, dSec), ...
+                sprintf(':SOUR%d:FUNC:PULS:WIDT %1.3e', u8Ch, dSec), ...
+                ... % manually trigger the burst
+                sprintf(':SOUR%d:BURS:TRIG', p.Results.u8Ch) ...
+            };
+            this.write(strjoin(ceCmd, ';'));
+        end
+        
+        
+        function turnOn5VTTL(this, u8Ch)
+            cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
+            this.write(cCmd);
+        end
+        
+        function turnOff5VTTL(this, u8Ch)
+            cCmd = sprintf(':SOUR%d:APPL:DC 1,1,0', u8Ch);
+            this.write(cCmd);
+        end
+        
+        function configureFor5VTTLPulse(this, u8Ch)
+            
+            
+            % Set output off
+            %cCmd = sprintf(':OUTP%d OFF', u8Ch);
+            %this.write(cCmd);
+            
+            % Set low and high levels of specified channel
+            cCmd = sprintf(':SOUR%d:VOLT:LEV:IMM:LOW %1.3e', u8Ch, 0);
+            this.write(cCmd);
+            
+            cCmd = sprintf(':SOUR%d:VOLT:LEV:IMM:HIGH %1.3e', u8Ch, 5);
+            this.write(cCmd);
+            
+            % Set the waveform of the specified channel to pulse
+            cCmd = sprintf(':SOUR%d:APPL:PULS 1,5,0,0', u8Ch);
+            this.write(cCmd);
+            
+            % Set output on
+            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            this.write(cCmd);
+            
+            return;
+            
+            % Turn burst off
+            cCmd = sprintf(':SOUR%d:BURS OFF', u8Ch);
+            this.write(cCmd);
+            
+            % Set burt mode to N cycle
+            cCmd = sprintf(':SOUR%d:BURS:MODE TRIG', u8Ch);
+            this.write(cCmd);
+            
+            % Set number of cycles to 1
+            cCmd = sprintf(':SOUR%d:BURS:NCYC 1', u8Ch);
+            this.write(cCmd);
+            
+            % Tell idle times (when not bursting to use the bottom/ low
+            % level of the pulse signal)
+            cCmd = sprintf(':SOUR%d:BURS:IDLE BOTTOM', u8Ch);
+            this.write(cCmd);
+            
+            % Set the burst trigger source to "Manual"
+            cCmd = sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', u8Ch);
+            this.write(cCmd);
+            
+            % Turn burst on
+            cCmd = sprintf(':SOUR%d:BURS ON', u8Ch);
+            this.write(cCmd);
+                        
+            
+            
+                
+            %{
+            ceCmd = {...
+                ... % Set output off
+                sprintf(':OUTP%d OFF', u8Ch), ...
+                ... % Set low and high levels of specified channel
+            	sprintf(':SOUR%d:VOLT:LEV:IMM:LOW %1.3e', u8Ch, 0), ...
+            	sprintf(':SOUR%d:VOLT:LEV:IMM:HIGH %1.3e', u8Ch, 5), ...
+                ... % Turn burst off
+                sprintf(':SOUR%d:BURS OFF', u8Ch), ...
+                ... % Set burt mode to N cycle
+                sprintf(':SOUR%d:BURS:MODE TRIG', u8Ch), ...
+                ... % Set number of cycles to 1
+                sprintf(':SOUR%d:BURS:NCYC 1', u8Ch), ...
+                ... % Tell idle times (when not bursting to use the bottom/ low
+                ... % level of the pulse signal)
+                sprintf(':SOUR%d:BURS:IDLE BOTTOM', u8Ch), ...
+                ... % Set the burst trigger source to "Manual"
+                sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', u8Ch), ...
+                ... % Turn burst on
+                sprintf(':SOUR%d:BURS ON', u8Ch), ...
+                ... % Set the waveform of the specified channel to pulse
+                sprintf(':SOUR%d:APPL:PULS', u8Ch), ...
+                ... % Set output on
+                sprintf(':OUTP%d ON', u8Ch), ...
+            };
+            
+            this.write(strjoin(ceCmd, ';'));  
+          %}
             
         end
+        
         
         % @param {uint8 1x1} u8Ch - channel (1 or 2)
         % @param {double 1x1} dPeriod - period (sec) [67e-9 : 1e6]
@@ -60,16 +164,52 @@ classdef DG1000Z < rigol.TcpClientBase
             cCmd2 = sprintf(':SOUR%d:FUNC:PULS:WIDT %1.3e', p.Results.u8Ch, p.Results.dWidth);
             cCmd3 = sprintf(':SOUR%d:VOLT:LEV:IMM:LOW %1.3e', p.Results.u8Ch, p.Results.dLow);
             cCmd4 = sprintf(':SOUR%d:VOLT:LEV:IMM:HIGH %1.3e', p.Results.u8Ch, p.Results.dHigh);
-            this.write(strjoin({cCmd1, cCmd2, cCmd3, cCmd4}, ';'));
+            this.write(strjoin({cCmd3, cCmd4, cCmd1, cCmd2}, ';'));
+            
+            % Burst mode, single pulse
             
             
-            % this.setSourceVoltageLow(p.Results.u8Ch, p.Results.dLow);
-            % this.setSourceVoltageHigh(p.Results.u8Ch, p.Results.dHigh);
-
+            cCmd1 = sprintf(':SOUR%d:BURS:MODE TRIG', p.Results.u8Ch); % N cycle burst mode
+            cCmd2 = sprintf(':SOUR%d:BURS:NCYC 1', p.Results.u8Ch); % Set number of cycles to 1
+            cCmd3 = sprintf(':SOUR%d:BURS ON', p.Results.u8Ch);
+            cCmd4 = sprintf(':SOUR%d:BURS:IDLE BOTTOM', p.Results.u8Ch);
+            % Set the burst trigger source to "Manual"
+            cCmd5 = sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', p.Results.u8Ch);
+            % Manually trigger a burst output immediately on the specified channel.
+            cCmd6 = sprintf(':SOUR%d:BURS:TRIG', p.Results.u8Ch);  % Can also do *TRG I think
+            
+            
+            this.write(strjoin({cCmd1, cCmd2, cCmd3, cCmd4, cCmd5, cCmd6}, ';'));
+            
         end
         
-        function setSourceVoltageLow(this, u8Ch, dVal)
+        
+        function c = getBurstModeIdlePosition(this, u8Ch)
             
+            cCmd = sprintf(':SOUR%d:BURS:IDLE?', u8Ch);
+            c = this.queryChar(cCmd);
+            
+        end
+        
+        function d = getPulsePeriod(this, u8Ch)
+            
+            cCmd = sprintf(':SOUR%d:FUNC:PULS:PER?', u8Ch);
+            d = this.queryDouble(cCmd);
+        end
+        
+        function c = getBurstGatePolarity(this, u8Ch)
+            cCmd = sprintf(':SOUR%d:BURS:GATE:POL?', u8Ch);
+            c = this.queryChar(cCmd);
+        end
+        
+        function triggerBurst(this, u8Ch)
+            cCmd = sprintf(':SOUR%d:BURS:TRIG', u8Ch);
+            this.write(cCmd);
+        end
+
+                
+        function setSourceVoltageLow(this, u8Ch, dVal)
+            cCmd = sprintf(':SOUR%d:VOLT:LEV:IMM:LOW %1.3e', u8Ch, dVal);
             this.write(cCmd);            
         end
         

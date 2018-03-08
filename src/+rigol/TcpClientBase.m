@@ -15,8 +15,12 @@ classdef TcpClientBase < handle
         comm
         
         % {double 1x1}
-        dTimeout = 1
+        dTimeout = 2
         
+        % {uint8 1x1} - terminator byte received from hardware in decimal 
+        % form, e.g., 13 (carriage return), 10 (line feed)
+        % FIX ME should support a list of int8
+        u8Terminator = uint8(10)
     end
     
     methods
@@ -42,47 +46,75 @@ classdef TcpClientBase < handle
     
     methods (Access = protected)
                 
-        % @param {uint8 1x1} u8Terminator - terminator byte in
-        % decimal form, e.g. 10, 13
+        
         % @return {uint8 1xm} stream of bytes retrieved from the 
         % hardware
         
-        function u8 = readToTerminator(this, u8Terminator)
+        function u8 = readToTerminator(this)
             
             lTerminatorReached = false;
+            lTimedOut = false;
             u8Result = [];
             idTic = tic;
-            lDebug = false;
+            lDebug = true;
             
-            while(~lTerminatorReached && ...
-                   toc(idTic) < this.dTimeout )
+            while(~lTerminatorReached && ~lTimedOut)
                
+                
+                
                 if (this.comm.BytesAvailable > 0)
                     
-                    cMsg = [...
-                        sprintf('readToTerminator(%d) ', u8Terminator), ...
-                        sprintf('reading %u bytesAvailable', this.comm.BytesAvailable), ...
-                        '\n' ...
-                    ];
-                    lDebug && fprintf(cMsg);
-                    % Append available bytes to previously read bytes
+                    if lDebug
+                        cMsg = [...
+                            sprintf('readToTerminator() [%u] ', this.u8Terminator), ...
+                            sprintf('reading %u bytesAvailable', this.comm.BytesAvailable) ...
+                        ];
+                        this.msg(cMsg);
+                    end
                     
                     % {uint8 1xm} 
                     u8Val = read(this.comm, this.comm.BytesAvailable);
                     % {uint8 1x?}
+                    
+                    % append new bytes to accumulated bytes
                     u8Result = [u8Result u8Val];
+                    
                     % search new data for terminator
-                    u8Index = find(u8Val == u8Terminator);
+                    u8Index = find(u8Val == this.u8Terminator);
                     if ~isempty(u8Index)
+                        
+                        if (lDebug)
+                            cMsg = sprintf('readToTerminator() found terminator!');
+                            this.msg(cMsg);
+                        end
+                       
                         lTerminatorReached = true;
+                    else
+                       if (lDebug)
+                            cMsg = sprintf('readToTerminator() did not find terminator in read bytes (see decimal rep of bytes below)');
+                            this.msg(cMsg);
+                            u8Val
+                       end
                     end
                 else
-                    cMsg = sprintf(...
-                        'micronix.MMC103.readToTerminator() no BytesAvailable %1.3f s\n', ...
-                        toc(idTic) ...
-                    );
-                    lDebug && fprintf(cMsg);
+                    if (lDebug)
+                        cMsg = sprintf(...
+                            'readToTerminator() no BytesAvailable at %1.3f s', ...
+                            toc(idTic) ...
+                        );
+                        this.msg(cMsg);
+                    end
                 end
+                
+                if (toc(idTic) > this.dTimeout)
+                    if (lDebug)
+                        cMsg = sprintf('TIMEOUT: setting lTimedOut to true at %1.3f s', toc(idTic));
+                        this.msg(cMsg);
+                    end
+                    lTimedOut = true;
+                end
+                
+                pause(0.1)
             end
             
             u8 = u8Result;
@@ -96,10 +128,10 @@ classdef TcpClientBase < handle
         
         function c = read(this)
             
-            u8Result = this.readToTerminator(uint8(13));
+            u8Result = this.readToTerminator();
             
-            % remove line feed and carriage return terminator
-            u8Result = u8Result(1 : end - 2);
+            % remove terminator
+            u8Result = u8Result(1 : end - length(this.u8Terminator));
             
             % convert to ASCII (char)
             c = char(u8Result);
@@ -117,7 +149,7 @@ classdef TcpClientBase < handle
             
             lDebug = true;
             lDebug && fprintf('write(%s)\n', cCmd);
-            u8Cmd = [uint8(cCmd) 13];
+            u8Cmd = [uint8(cCmd) this.u8Terminator];
             write(this.comm, u8Cmd);                    
         end
 
@@ -134,14 +166,11 @@ classdef TcpClientBase < handle
         % Send a command and format the result as a double
         function d = queryDouble(this, cCmd)
             c = this.queryChar(cCmd);
-            % strip leading '#' char
-            c = c(2:end);
             d = str2double(c);
         end
         
         % Send a command and get the result back as ASCII
         function c = queryChar(this, cCmd)
-            this.clearBytesAvailable();
             this.write(cCmd)
             c = this.read();
         end

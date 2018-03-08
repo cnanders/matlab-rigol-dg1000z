@@ -15,5 +15,21 @@ device = rigol.DG1000Z(...
 );
 
 device.idn()
-device.setSourcePulse()
-device.setSourcePulse('dPeriod', 1.3)
+
+device.configureFor5VTTLPulse(1);
+
+%{
+device.setSourcePulse(...
+    'dHigh', 0.2, ...
+    'dLow', -0.2, ...
+    'dPeriod', 0.42, ...
+    'dWidth', 0.1 ...
+)
+
+device.getBurstModeIdlePosition(uint8(1))
+device.getPulsePeriod(uint8(1))
+device.getBurstGatePolarity(uint8(1))
+
+
+device.triggerBurst(uint8(1))
+%}
