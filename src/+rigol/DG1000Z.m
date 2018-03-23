@@ -5,6 +5,23 @@ classdef DG1000Z < rigol.TcpClientBase
     properties
         
         % Requires port 5555
+        
+        dDelay = 0.25;
+    end
+    
+    properties (Access = private)
+        
+        % {logical 1x1} true when the hardware is outputting 5V
+        lIsOn = false
+        
+        % {logical 1x1} set to true after configureFor5VTTLPulse is called
+        % and set to false after turnOn5VTTL is called (which requires 
+        % ARB wafeform type.
+        lIsConfiguredFor5VTTLPulse = false
+        
+        % {timer 1x1} - storage for timer used in the trigger method to
+        % update the value of lIsOn
+        t
     end
     
     methods
@@ -28,14 +45,56 @@ classdef DG1000Z < rigol.TcpClientBase
             c = this.queryChar('*IDN?');
         end
         
+        % @return {logical 1x1} - true if outputting 5VTTL or if in the 
+        % middle of communication between requesting 5VTTL and knowing 100%
+        % that the 
+        function l = isOn(this)
+            
+        end
         % Create a single 5 Volt TTL pulse of specified duration in
         % seconds
         % @param {double 1x1} dSec - pulse duration in seconds
         
         function trigger5VTTLPulse(this, u8Ch, dSec)
             
+            if this.lIsOn == true
+                fprintf('rigol.DG1000Z.trigger5VTTLPulse returning since already outputting 5VTTL\n');
+                return
+            end
+            
+            this.lIsOn = true;
+            
             % !! Need to call configureChannelFor5VTTLPulse first.
-           
+            if ~this.lIsConfiguredFor5VTTLPulse
+                this.configureFor5VTTLPulse(u8Ch)
+            end
+            
+            % set period to 10% longer than dSec
+            cCmd = sprintf(':SOUR%d:FUNC:PULS:PER %1.3e', u8Ch, dSec * 1.1);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            % set width to dSec
+            cCmd = sprintf(':SOUR%d:FUNC:PULS:WIDT %1.3e', u8Ch, dSec);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            % manually trigger the burst
+            cCmd = sprintf(':SOUR%d:BURS:TRIG', u8Ch);
+            this.write(cCmd);
+            
+            % There is no way to ask the hardware what it is outputting
+            % Use a timer to flip the lIsOn property after dDelay + dSec
+            % seconds go by
+            
+            this.t = timer(...
+                'StartDelay', dSec + this.dDelay, ...
+                'TimerFcn', @this.onTimer ...
+            );
+            start(this.t);
+            
+            % cannot write sequentially because it is a POS
+            %{
             ceCmd = {
                 sprintf(':SOUR%d:FUNC:PULS:PER %1.3e', u8Ch, dSec), ...
                 sprintf(':SOUR%d:FUNC:PULS:WIDT %1.3e', u8Ch, dSec), ...
@@ -43,71 +102,129 @@ classdef DG1000Z < rigol.TcpClientBase
                 sprintf(':SOUR%d:BURS:TRIG', p.Results.u8Ch) ...
             };
             this.write(strjoin(ceCmd, ';'));
+            %}
         end
         
+        function onTimer(this, src, evt)
+            this.lIsOn = false;
+        end
         
         function turnOn5VTTL(this, u8Ch)
+            this.lIsConfiguredFor5VTTLPulse = false;
+            this.lIsOn = true;
             cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
             this.write(cCmd);
         end
         
         function turnOff5VTTL(this, u8Ch)
+            this.lIsConfiguredFor5VTTLPulse = false;
             cCmd = sprintf(':SOUR%d:APPL:DC 1,1,0', u8Ch);
             this.write(cCmd);
+            this.lIsOn = false;
+        end
+        
+        function test(this, u8Ch)
+            
+            
+            % Set output on
+            cCmd = sprintf(':OUTP%d OFF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay)
+            
+            cCmd = sprintf(':SOUR%d:APPL:SIN', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay)
+            
+            cCmd = sprintf(':SOUR%d:APPL:PULS', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay)
+            
+            % Set output on
+            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay)
+            
         end
         
         function configureFor5VTTLPulse(this, u8Ch)
             
             
             % Set output off
-            %cCmd = sprintf(':OUTP%d OFF', u8Ch);
-            %this.write(cCmd);
+            cCmd = sprintf(':OUTP%d OFF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
             
             % Set low and high levels of specified channel
+            %{
             cCmd = sprintf(':SOUR%d:VOLT:LEV:IMM:LOW %1.3e', u8Ch, 0);
             this.write(cCmd);
+            pause(this.dDelay);
             
             cCmd = sprintf(':SOUR%d:VOLT:LEV:IMM:HIGH %1.3e', u8Ch, 5);
             this.write(cCmd);
+            pause(this.dDelay);
+            %}
             
-            % Set the waveform of the specified channel to pulse
-            cCmd = sprintf(':SOUR%d:APPL:PULS 1,5,0,0', u8Ch);
+            % Set offset and amplitude to get 5VTTL
+            
+            cCmd = sprintf(':SOUR%d:VOLT:OFFS %1.3e', u8Ch, 2.5);
             this.write(cCmd);
+            pause(this.dDelay);
             
-            % Set output on
-            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            cCmd = sprintf(':SOUR%d:VOLT %1.3e', u8Ch, 5);
             this.write(cCmd);
+            pause(this.dDelay);
             
-            return;
+            
+            
+            % Set the waveform of the specified channel to pulse with
+            % an amplitude of 5V and an offset of 2.5V
+            % Look up the APPLY commands in manual
+            % freq, amp, offset, phase
+            cCmd = sprintf(':SOUR%d:APPL:PULS 1,5,2.5,0', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
             
             % Turn burst off
             cCmd = sprintf(':SOUR%d:BURS OFF', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
             
             % Set burt mode to N cycle
             cCmd = sprintf(':SOUR%d:BURS:MODE TRIG', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
             
             % Set number of cycles to 1
             cCmd = sprintf(':SOUR%d:BURS:NCYC 1', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
             
             % Tell idle times (when not bursting to use the bottom/ low
             % level of the pulse signal)
             cCmd = sprintf(':SOUR%d:BURS:IDLE BOTTOM', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
             
             % Set the burst trigger source to "Manual"
             cCmd = sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
             
             % Turn burst on
             cCmd = sprintf(':SOUR%d:BURS ON', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
+            
+            % Set output on
+            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
                         
+                  
+            this.lIsConfiguredFor5VTTLPulse = true;
             
-            
-                
             %{
             ceCmd = {...
                 ... % Set output off
@@ -140,6 +257,7 @@ classdef DG1000Z < rigol.TcpClientBase
         end
         
         
+        %{
         % @param {uint8 1x1} u8Ch - channel (1 or 2)
         % @param {double 1x1} dPeriod - period (sec) [67e-9 : 1e6]
         % @param {double 1x1} dHigh - high level (V) [-10: 10]
@@ -223,6 +341,7 @@ classdef DG1000Z < rigol.TcpClientBase
             
             
         end
+        %}
         
 
     end

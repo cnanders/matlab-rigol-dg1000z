@@ -16,7 +16,17 @@ device = rigol.DG1000Z(...
 
 device.idn()
 
-device.configureFor5VTTLPulse(1);
+% device.configureFor5VTTLPulse(1);
+% pause(1);
+
+device.trigger5VTTLPulse(1, 0.2);
+pause(3)
+device.trigger5VTTLPulse(1, 0.3);
+pause(3)
+device.trigger5VTTLPulse(1, 0.4);
+pause(3)
+device.trigger5VTTLPulse(1, 0.5);
+% device.test(1)
 
 %{
 device.setSourcePulse(...

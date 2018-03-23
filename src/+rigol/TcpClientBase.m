@@ -138,7 +138,7 @@ classdef TcpClientBase < handle
                     
         end
         
-        % Write an ASCII command to  
+        % Write an ASCII command to the device  
         % Create the binary command packet as follows:
         % Convert the char command into a list of uint8 (decimal), 
         % concat with the first terminator: 10 (base10) === 'line feed')
