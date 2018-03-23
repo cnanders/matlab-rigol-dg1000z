@@ -48,9 +48,10 @@ classdef DG1000Z < rigol.TcpClientBase
         % @return {logical 1x1} - true if outputting 5VTTL or if in the 
         % middle of communication between requesting 5VTTL and knowing 100%
         % that the 
-        function l = isOn(this)
-            
+        function l = getIsOn(this)
+            l = this.lIsOn;
         end
+        
         % Create a single 5 Volt TTL pulse of specified duration in
         % seconds
         % @param {double 1x1} dSec - pulse duration in seconds
