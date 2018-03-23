@@ -11,17 +11,19 @@ classdef DG1000Z < rigol.TcpClientBase
     
     properties (Access = private)
         
-        % {logical 1x1} true when the hardware is outputting 5V
-        lIsOn = false
+        % {logical 1x2} true when the hardware is outputting 5V.  One 
+        % value for each channel
+        lIsOn = [false false]
         
         % {logical 1x1} set to true after configureFor5VTTLPulse is called
         % and set to false after turnOn5VTTL is called (which requires 
         % ARB wafeform type.
         lIsConfiguredFor5VTTLPulse = false
         
-        % {timer 1x1} - storage for timer used in the trigger method to
-        % update the value of lIsOn
-        t
+        % {timer 1x1} - storage for timers used in the trigger method to
+        % update the value of lIsOn of each channel
+        t1
+        t2
     end
     
     methods
@@ -48,8 +50,8 @@ classdef DG1000Z < rigol.TcpClientBase
         % @return {logical 1x1} - true if outputting 5VTTL or if in the 
         % middle of communication between requesting 5VTTL and knowing 100%
         % that the 
-        function l = getIsOn(this)
-            l = this.lIsOn;
+        function l = getIsOn(this, u8Ch)
+            l = this.lIsOn(u8Ch);
         end
         
         % Create a single 5 Volt TTL pulse of specified duration in
@@ -58,12 +60,12 @@ classdef DG1000Z < rigol.TcpClientBase
         
         function trigger5VTTLPulse(this, u8Ch, dSec)
             
-            if this.lIsOn == true
+            if this.lIsOn(u8Ch) == true
                 fprintf('rigol.DG1000Z.trigger5VTTLPulse returning since already outputting 5VTTL\n');
                 return
             end
             
-            this.lIsOn = true;
+            this.lIsOn(u8Ch) = true;
             
             % !! Need to call configureChannelFor5VTTLPulse first.
             if ~this.lIsConfiguredFor5VTTLPulse
@@ -84,15 +86,6 @@ classdef DG1000Z < rigol.TcpClientBase
             cCmd = sprintf(':SOUR%d:BURS:TRIG', u8Ch);
             this.write(cCmd);
             
-            % There is no way to ask the hardware what it is outputting
-            % Use a timer to flip the lIsOn property after dDelay + dSec
-            % seconds go by
-            
-            this.t = timer(...
-                'StartDelay', dSec + this.dDelay, ...
-                'TimerFcn', @this.onTimer ...
-            );
-            start(this.t);
             
             % cannot write sequentially because it is a POS
             %{
@@ -104,15 +97,41 @@ classdef DG1000Z < rigol.TcpClientBase
             };
             this.write(strjoin(ceCmd, ';'));
             %}
+            
+            
+            % There is no way to ask the hardware what it is outputting
+            % Use a timer to flip the lIsOn property after dDelay + dSec
+            % seconds go by
+            
+            if (u8Ch == 1)
+                this.t1 = timer(...
+                    'StartDelay', dSec + this.dDelay, ...
+                    'TimerFcn', @this.onTimer1 ...
+                );
+                start(this.t1);
+            else
+                this.t2 = timer(...
+                    'StartDelay', dSec + this.dDelay, ...
+                    'TimerFcn', @this.onTimer2 ...
+                );
+                start(this.t2);
+            end
+            
+            
+            
         end
         
-        function onTimer(this, src, evt)
-            this.lIsOn = false;
+        function onTimer1(this, src, evt)
+            this.lIsOn(1) = false;
+        end
+        
+        function onTimer2(this, src, evt)
+            this.lIsOn(2) = false;
         end
         
         function turnOn5VTTL(this, u8Ch)
             this.lIsConfiguredFor5VTTLPulse = false;
-            this.lIsOn = true;
+            this.lIsOn(u8Ch) = true;
             cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
             this.write(cCmd);
         end
@@ -121,7 +140,7 @@ classdef DG1000Z < rigol.TcpClientBase
             this.lIsConfiguredFor5VTTLPulse = false;
             cCmd = sprintf(':SOUR%d:APPL:DC 1,1,0', u8Ch);
             this.write(cCmd);
-            this.lIsOn = false;
+            this.lIsOn(u8Ch) = false;
         end
         
         function test(this, u8Ch)
