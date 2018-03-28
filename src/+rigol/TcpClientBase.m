@@ -155,7 +155,7 @@ classdef TcpClientBase < handle
         % @param {char 1xm} ASCII command without terminators
         function write(this, cCmd)
             
-            lDebug = true;
+            lDebug = false;
             lDebug && fprintf('write(%s)\n', cCmd);
             u8Cmd = [uint8(cCmd) this.u8Terminator];
             write(this.comm, u8Cmd);                    
