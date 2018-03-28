@@ -22,13 +22,6 @@ classdef DG1000Z < rigol.TcpClientBase
         % value for each channel
         lIsOn = [false false]
         
-        % {logical 1x2} set to true after configureFor5VTTLPulse is called
-        % and set to false after turnOn5VTTL is called (which requires 
-        % ARB wafeform type.
-        lIsConfiguredFor5VTTLPulse = [false false]
-        
-        lIsConfiguredFor5VDC = [false false]
-        
         % {timer 1x1} - storage for timers used in the trigger method to
         % update the value of lIsOn of each channel
         t1
