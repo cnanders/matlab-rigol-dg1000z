@@ -6,7 +6,7 @@ addpath(genpath(fullfile(cDirThis, '..', 'src')));
 clear
 clc
 
-cHost = '192.168.10.40';
+cHost = '192.168.20.35';
 u16Port = 5555;
 
 device = rigol.DG1000Z(...
@@ -26,6 +26,9 @@ pause(3)
 device.trigger5VTTLPulse(1, 0.4);
 pause(3)
 device.trigger5VTTLPulse(1, 0.5);
+
+
+
 % device.test(1)
 
 %{

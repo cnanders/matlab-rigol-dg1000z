@@ -1,6 +1,4 @@
 classdef DG1000Z < rigol.TcpClientBase
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
     
     properties
         
@@ -124,6 +122,12 @@ classdef DG1000Z < rigol.TcpClientBase
             this.lIsOn = false;
         end
         
+        function turnOn5VTTL2(this, u8Ch)
+            
+            
+        end
+        
+        
         function test(this, u8Ch)
             
             
@@ -146,6 +150,70 @@ classdef DG1000Z < rigol.TcpClientBase
             pause(this.dDelay)
             
         end
+        
+        function configureFor5VDC(this, u8Ch)
+        
+            % Set output off
+            cCmd = sprintf(':OUTP%d OFF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            
+            % Set the waveform of the specified channel to DC with
+            % an value of 5V
+            % Look up the APPLY commands in manual
+            % freq, amp, offset, phase
+            
+            cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            
+            %{
+            % Turn burst off
+            cCmd = sprintf(':SOUR%d:BURS OFF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            %}
+            
+            % Set burt mode to infinite
+            cCmd = sprintf(':SOUR%d:BURS:MODE INF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            %{
+            % Set number of cycles to 1
+            cCmd = sprintf(':SOUR%d:BURS:NCYC 1', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            %}
+            
+            % Tell idle times (when not bursting to use the bottom/ low
+            % level of the pulse signal)
+            cCmd = sprintf(':SOUR%d:BURS:IDLE BOTTOM', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            % Set the burst trigger source to "Manual"
+            cCmd = sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            % Turn burst on
+            cCmd = sprintf(':SOUR%d:BURS ON', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
+            % Set output on
+            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+                        
+            
+            this.lIsConfiguredFor5VDC = true;
+        
+        end
+        
         
         function configureFor5VTTLPulse(this, u8Ch)
             

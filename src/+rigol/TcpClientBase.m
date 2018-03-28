@@ -14,8 +14,13 @@ classdef TcpClientBase < handle
         % {tcpclient 1x1}
         comm
         
-        % {double 1x1}
+        % {double 1x1} waiting time in seconds to complete read and write
+        % operations
         dTimeout = 2
+        
+        % {double 1x1} the maximum time in seconds to wait for a connection
+        % request to the specified remote host to succeed or fail
+        dTimeoutConnect = 2
         
         % {uint8 1x1} - terminator byte received from hardware in decimal 
         % form, e.g., 13 (carriage return), 10 (line feed)
@@ -37,7 +42,10 @@ classdef TcpClientBase < handle
                 end
             end
             
-            this.comm = tcpclient(this.cHost, this.u16Port);
+            this.comm = tcpclient(this.cHost, this.u16Port, ...
+                'ConnectTimeout', this.dTimeoutConnect, ...
+                'Timeout', this.dTimeout ...
+            );
             this.clearBytesAvailable();
             
         end
