@@ -1,5 +1,14 @@
 classdef DG1000Z < rigol.TcpClientBase
     
+    
+    properties (Constant)
+        
+        cSOURCE_TYPE_DC = 'DC';
+        cSOURCE_TYPE_PULSE = 'PULSE';
+        cSOURCE_TYPE_NONE = 'NONE';
+        
+    end
+    
     properties
         
         % Requires port 5555
@@ -13,15 +22,22 @@ classdef DG1000Z < rigol.TcpClientBase
         % value for each channel
         lIsOn = [false false]
         
-        % {logical 1x1} set to true after configureFor5VTTLPulse is called
+        % {logical 1x2} set to true after configureFor5VTTLPulse is called
         % and set to false after turnOn5VTTL is called (which requires 
         % ARB wafeform type.
-        lIsConfiguredFor5VTTLPulse = false
+        lIsConfiguredFor5VTTLPulse = [false false]
+        
+        lIsConfiguredFor5VDC = [false false]
         
         % {timer 1x1} - storage for timers used in the trigger method to
         % update the value of lIsOn of each channel
         t1
         t2
+        
+        % {char 1xm} - see cSOURCE_TYPE_* stores the most recently set
+        % source type on the Rigol.  Need to alternate between Arb and
+        % Pulse.
+        cSourceType
     end
     
     methods
@@ -30,6 +46,8 @@ classdef DG1000Z < rigol.TcpClientBase
         function this = DG1000Z(varargin) 
             
             this@rigol.TcpClientBase(varargin{:});
+            this.cSourceType{1} = this.cSOURCE_TYPE_NONE;
+            this.cSourceType{2} = this.cSOURCE_TYPE_NONE;
             
             for k = 1 : 2: length(varargin)
                 this.msg(sprintf('passed in %s', varargin{k}));
@@ -64,10 +82,10 @@ classdef DG1000Z < rigol.TcpClientBase
             end
             
             this.lIsOn(u8Ch) = true;
-            
-            % !! Need to call configureChannelFor5VTTLPulse first.
-            if ~this.lIsConfiguredFor5VTTLPulse
-                this.configureFor5VTTLPulse(u8Ch)
+                        
+            switch this.cSourceType{u8Ch}
+                case {this.cSOURCE_TYPE_NONE, this.cSOURCE_TYPE_DC}
+                    this.configureFor5VTTLPulse(u8Ch)
             end
             
             % set period to 10% longer than dSec
@@ -116,7 +134,6 @@ classdef DG1000Z < rigol.TcpClientBase
             end
             
             
-            
         end
         
         function onTimer1(this, src, evt)
@@ -128,23 +145,40 @@ classdef DG1000Z < rigol.TcpClientBase
         end
         
         function turnOn5VTTL(this, u8Ch)
-            this.lIsConfiguredFor5VTTLPulse = false;
-            this.lIsOn(u8Ch) = true;
-            cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
+            
+            if this.lIsOn(u8Ch)
+                return
+            end
+            
+            % Set output off
+            cCmd = sprintf(':OUTP%d OFF', u8Ch);
             this.write(cCmd);
+            pause(this.dDelay);
+            
+            switch this.cSourceType{u8Ch}
+                case {this.cSOURCE_TYPE_NONE, this.cSOURCE_TYPE_PULSE}
+                    this.configureFor5VDC(u8Ch)
+            end
+            
+            this.lIsOn(u8Ch) = true;
+                                    
+            % Set output on
+            cCmd = sprintf(':OUTP%d ON', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
+            
         end
         
         function turnOff5VTTL(this, u8Ch)
-            this.lIsConfiguredFor5VTTLPulse = false;
-            cCmd = sprintf(':SOUR%d:APPL:DC 1,1,0', u8Ch);
-            this.write(cCmd);
+            
             this.lIsOn(u8Ch) = false;
+            
+            % Set output off
+            cCmd = sprintf(':OUTP%d OFF', u8Ch);
+            this.write(cCmd);
+            pause(this.dDelay);
         end
         
-        function turnOn5VTTL2(this, u8Ch)
-            
-            
-        end
         
         
         function test(this, u8Ch)
@@ -171,66 +205,17 @@ classdef DG1000Z < rigol.TcpClientBase
         end
         
         function configureFor5VDC(this, u8Ch)
-        
-            % Set output off
-            cCmd = sprintf(':OUTP%d OFF', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            
-            
+
             % Set the waveform of the specified channel to DC with
-            % an value of 5V
-            % Look up the APPLY commands in manual
-            % freq, amp, offset, phase
+            % a value of 5V
+
             
             cCmd = sprintf(':SOUR%d:APPL:DC 1,1,5', u8Ch);
             this.write(cCmd);
             pause(this.dDelay);
             
-            
-            %{
-            % Turn burst off
-            cCmd = sprintf(':SOUR%d:BURS OFF', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            %}
-            
-            % Set burt mode to infinite
-            cCmd = sprintf(':SOUR%d:BURS:MODE INF', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            
-            %{
-            % Set number of cycles to 1
-            cCmd = sprintf(':SOUR%d:BURS:NCYC 1', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            %}
-            
-            % Tell idle times (when not bursting to use the bottom/ low
-            % level of the pulse signal)
-            cCmd = sprintf(':SOUR%d:BURS:IDLE BOTTOM', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            
-            % Set the burst trigger source to "Manual"
-            cCmd = sprintf(':SOUR%d:BURS:TRIG:SOUR MAN', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            
-            % Turn burst on
-            cCmd = sprintf(':SOUR%d:BURS ON', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-            
-            % Set output on
-            cCmd = sprintf(':OUTP%d ON', u8Ch);
-            this.write(cCmd);
-            pause(this.dDelay);
-                        
-            
-            this.lIsConfiguredFor5VDC = true;
-        
+            this.cSourceType{u8Ch} = this.cSOURCE_TYPE_DC;
+                                
         end
         
         
@@ -310,8 +295,7 @@ classdef DG1000Z < rigol.TcpClientBase
             this.write(cCmd);
             pause(this.dDelay);
                         
-                  
-            this.lIsConfiguredFor5VTTLPulse = true;
+            this.cSourceType{u8Ch} = this.cSOURCE_TYPE_PULSE;      
             
             %{
             ceCmd = {...

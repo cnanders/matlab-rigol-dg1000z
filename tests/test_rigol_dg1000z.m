@@ -21,11 +21,13 @@ device.idn()
 
 device.trigger5VTTLPulse(1, 0.2);
 pause(3)
+%{
 device.trigger5VTTLPulse(1, 0.3);
 pause(3)
 device.trigger5VTTLPulse(1, 0.4);
 pause(3)
 device.trigger5VTTLPulse(1, 0.5);
+%}
 
 
 
