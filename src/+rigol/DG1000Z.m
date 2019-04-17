@@ -143,6 +143,8 @@ classdef DG1000Z < rigol.TcpClientBase
                 return
             end
             
+            this.lIsOn(u8Ch) = true;
+            
             % Set output off
             cCmd = sprintf(':OUTP%d OFF', u8Ch);
             this.write(cCmd);
@@ -153,7 +155,7 @@ classdef DG1000Z < rigol.TcpClientBase
                     this.configureFor5VDC(u8Ch)
             end
             
-            this.lIsOn(u8Ch) = true;
+            
                                     
             % Set output on
             cCmd = sprintf(':OUTP%d ON', u8Ch);
