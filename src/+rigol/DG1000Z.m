@@ -110,7 +110,7 @@ classdef DG1000Z < rigol.TcpClientBase
             
             % There is no way to ask the hardware what it is outputting
             % Use a timer to flip the lIsOn property after dDelay + dSec
-            % seconds go by
+            % seconds go by.  This is terrible. 
             
             if (u8Ch == 1)
                 this.t1 = timer(...
