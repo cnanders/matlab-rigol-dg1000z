@@ -14,6 +14,8 @@ classdef DG1000Z < rigol.TcpClientBase
         % Requires port 5555
         
         dDelay = 0.25;
+        
+        dPeriodOfTimer = 0.1
     end
     
     properties (Access = private)
@@ -21,6 +23,8 @@ classdef DG1000Z < rigol.TcpClientBase
         % {logical 1x2} true when the hardware is outputting 5V.  One 
         % value for each channel
         lIsOn = [false false]
+        
+        dCyclesOfTimer = [0 0]
         
         % {timer 1x1} - storage for timers used in the trigger method to
         % update the value of lIsOn of each channel
@@ -112,16 +116,28 @@ classdef DG1000Z < rigol.TcpClientBase
             % Use a timer to flip the lIsOn property after dDelay + dSec
             % seconds go by.  This is terrible. 
             
+            this.dCyclesOfTimer(u8Ch) = ceil(dSec / this.dPeriodOfTimer);
+            
             if (u8Ch == 1)
+%                 this.t1 = timer(...
+%                     'StartDelay', dSec + this.dDelay, ...
+%                     'TimerFcn', @this.onTimer1 ...
+%                 );
                 this.t1 = timer(...
-                    'StartDelay', dSec + this.dDelay, ...
-                    'TimerFcn', @this.onTimer1 ...
+                    'Period', this.dPeriodOfTimer, ...
+                    'TasksToExecute', this.dCyclesOfTimer(u8Ch), ...
+                    'TimerFcn', @this.onTimer1, ...
+                    'StopFcn', @this.onTimer1Stop, ...
+                    'ExecutionMode', 'fixedSpacing' ...
                 );
                 start(this.t1);
             else
                 this.t2 = timer(...
-                    'StartDelay', dSec + this.dDelay, ...
-                    'TimerFcn', @this.onTimer2 ...
+                    'Period', this.dPeriodOfTimer, ...
+                    'TasksToExecute', this.dCyclesOfTimer(u8Ch), ...
+                    'TimerFcn', @this.onTimer2, ...
+                    'StopFcn', @this.onTimer2Stop, ...
+                    'ExecutionMode', 'fixedSpacing' ...
                 );
                 start(this.t2);
             end
@@ -129,12 +145,29 @@ classdef DG1000Z < rigol.TcpClientBase
             
         end
         
-        function onTimer1(this, src, evt)
+        function onTimer1Stop(this, src, evt)
             this.lIsOn(1) = false;
         end
         
-        function onTimer2(this, src, evt)
+        function onTimer1(this, src, evt)
+            fprintf('rigol.DG1000z CH1 timer %d/%d tasks; avg. period %1.0f ms\n', ...
+                src.TasksExecuted, ...
+                this.dCyclesOfTimer(1), ...
+                src.AveragePeriod * 1000 ...
+            );
+        end
+        
+        function onTimer2Stop(this, src, evt)
             this.lIsOn(2) = false;
+        end
+        
+        
+        function onTimer2(this, src, evt)
+            fprintf('rigol.DG1000z CH2 timer %d/%d tasks; avg. period %1.0f ms\n', ...
+                src.TasksExecuted, ...
+                this.dCyclesOfTimer(2), ...
+                src.AveragePeriod * 1000 ...
+            );
         end
         
         function turnOn5VTTL(this, u8Ch)
@@ -167,6 +200,22 @@ classdef DG1000Z < rigol.TcpClientBase
         function turnOff5VTTL(this, u8Ch)
             
             this.lIsOn(u8Ch) = false;
+            
+            if (u8Ch == 1) 
+                if isa(this.t1, 'timer')
+                    if strcmpi(this.t1.Running, 'on')
+                        stop(this.t1);
+                    end
+                end
+            end
+            
+            if (u8Ch == 2) 
+                if isa(this.t2, 'timer')
+                    if strcmpi(this.t2.Running, 'on')
+                        stop(this.t2);
+                    end
+                end
+            end
             
             % Set output off
             cCmd = sprintf(':OUTP%d OFF', u8Ch);
