@@ -15,7 +15,7 @@ classdef DG1000Z < rigol.TcpClientBase
         
         dDelay = 0.25;
         
-        dPeriodOfTimer = 0.1
+        dPeriodOfTimer = 0.2
     end
     
     properties (Access = private)
